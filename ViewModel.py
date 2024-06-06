@@ -130,6 +130,150 @@ def delete_testcase(test_case_id):
             con.close()
             print("[INFO] PostgreSQL connection closed")
 
+def view_testcase(test_case_id):
+    con = None
+    try:
+        con = psycopg2.connect(
+            host=host,
+            user=db_user,
+            password=db_password,
+            database=db_name
+        )
+        with con.cursor() as cursor:
+            cursor.execute("SELECT name, description FROM TestCases WHERE id_case = %s;", (test_case_id,))
+            testcase = cursor.fetchone()
+
+            cursor.execute("SELECT StepNumber, ActionDescription, ExpectedResult FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;", (test_case_id,))
+            steps = cursor.fetchall()
+
+        view_window = tk.Toplevel(root)
+        view_window.title("Просмотр тест-кейса")
+
+        tk.Label(view_window, text="Название:").grid(row=0, column=0, sticky="w")
+        tk.Label(view_window, text=testcase[0]).grid(row=0, column=1, padx=10, pady=5, sticky="we")
+
+        tk.Label(view_window, text="Описание:").grid(row=1, column=0, sticky="w")
+        tk.Label(view_window, text=testcase[1]).grid(row=1, column=1, padx=10, pady=5, sticky="we")
+
+        steps_frame = tk.Frame(view_window)
+        steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
+
+        for step_num, (step_number, step, result) in enumerate(steps, start=1):
+            tk.Label(steps_frame, text=f"Шаг {step_num}:").grid(row=step_num, column=0, sticky="w")
+            tk.Label(steps_frame, text=step).grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
+            tk.Label(steps_frame, text="Ожидаемый результат:").grid(row=step_num, column=2, sticky="w")
+            tk.Label(steps_frame, text=result).grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
+
+        steps_frame.columnconfigure(1, weight=1)
+        steps_frame.columnconfigure(3, weight=1)
+        steps_frame.rowconfigure(len(steps) + 1, weight=1)
+
+    except Exception as ex:
+        print("[ERROR] Error while viewing test case:", ex)
+    finally:
+        if con:
+            con.close()
+            print("[INFO] PostgreSQL connection closed")
+
+def edit_testcase(test_case_id):
+    def save_edited_testcase():
+        name = name_entry.get()
+        description = description_entry.get()
+        steps = [(step_entry.get(), result_entry.get()) for step_entry, result_entry in steps_widgets]
+
+        con = None
+        try:
+            con = psycopg2.connect(
+                host=host,
+                user=db_user,
+                password=db_password,
+                database=db_name
+            )
+            with con.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE TestCases SET name = %s, description = %s WHERE id_case = %s;",
+                    (name, description, test_case_id)
+                )
+
+                cursor.execute("DELETE FROM TestCaseSteps WHERE TestCaseID = %s;", (test_case_id,))
+                for step_num, (step, result) in enumerate(steps, start=1):
+                    cursor.execute(
+                        "INSERT INTO TestCaseSteps (StepNumber, ActionDescription, ExpectedResult, TestCaseID) "
+                        "VALUES (%s, %s, %s, %s);",
+                        (step_num, step, result, test_case_id)
+                    )
+
+            con.commit()
+            print("[INFO] Test case updated successfully!")
+            edit_window.destroy()
+            refresh_testcases()  # Обновление списка тест-кейсов после редактирования
+
+        except Exception as ex:
+            print("[ERROR] Error while updating test case:", ex)
+        finally:
+            if con:
+                con.close()
+                print("[INFO] PostgreSQL connection closed")
+
+    con = None
+    try:
+        con = psycopg2.connect(
+            host=host,
+            user=db_user,
+            password=db_password,
+            database=db_name
+        )
+        with con.cursor() as cursor:
+            cursor.execute("SELECT name, description FROM TestCases WHERE id_case = %s;", (test_case_id,))
+            testcase = cursor.fetchone()
+
+            cursor.execute("SELECT StepNumber, ActionDescription, ExpectedResult FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;", (test_case_id,))
+            steps = cursor.fetchall()
+
+        edit_window = tk.Toplevel(root)
+        edit_window.title("Редактирование тест-кейса")
+
+        tk.Label(edit_window, text="Название:").grid(row=0, column=0, sticky="w")
+        name_entry = tk.Entry(edit_window)
+        name_entry.insert(0, testcase[0])
+        name_entry.grid(row=0, column=1, padx=10, pady=5, sticky="we")
+
+        tk.Label(edit_window, text="Описание:").grid(row=1, column=0, sticky="w")
+        description_entry = tk.Entry(edit_window)
+        description_entry.insert(0, testcase[1])
+        description_entry.grid(row=1, column=1, padx=10, pady=5, sticky="we")
+
+        steps_frame = tk.Frame(edit_window)
+        steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
+
+        steps_widgets = []
+        for step_num, (step_number, step, result) in enumerate(steps, start=1):
+            step_label = tk.Label(steps_frame, text=f"Шаг {step_num}:")
+            step_label.grid(row=step_num, column=0, sticky="w")
+            step_entry = tk.Entry(steps_frame, width=50)
+            step_entry.insert(0, step)
+            step_entry.grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
+            result_label = tk.Label(steps_frame, text="Ожидаемый результат:")
+            result_label.grid(row=step_num, column=2, sticky="w")
+            result_entry = tk.Entry(steps_frame, width=50)
+            result_entry.insert(0, result)
+            result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
+            steps_widgets.append((step_entry, result_entry))
+
+        steps_frame.columnconfigure(1, weight=1)
+        steps_frame.columnconfigure(3, weight=1)
+        steps_frame.rowconfigure(len(steps) + 1, weight=1)
+
+        save_button = tk.Button(edit_window, text="Сохранить", command=save_edited_testcase)
+        save_button.grid(row=3, column=0, columnspan=2, pady=10)
+
+    except Exception as ex:
+        print("[ERROR] Error while editing test case:", ex)
+    finally:
+        if con:
+            con.close()
+            print("[INFO] PostgreSQL connection closed")
+
 
 def create_testcase_window(test_case_id=None):
     def save_testcase_to_db():
@@ -143,14 +287,16 @@ def create_testcase_window(test_case_id=None):
             save_testcase(name, description, steps)
         testcase_window.destroy()
 
-    def add_step(step_num):
+    def add_step(step_num, step="", result=""):
         step_label = tk.Label(steps_frame, text=f"Шаг {step_num}:")
         step_label.grid(row=step_num, column=0, sticky="w")
         step_entry = tk.Entry(steps_frame, width=50)
+        step_entry.insert(0, step)
         step_entry.grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
         result_label = tk.Label(steps_frame, text="Ожидаемый результат:")
         result_label.grid(row=step_num, column=2, sticky="w")
         result_entry = tk.Entry(steps_frame, width=50)
+        result_entry.insert(0, result)
         result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
 
         steps_widgets.append((step_entry, result_entry))
@@ -207,12 +353,11 @@ def create_testcase_window(test_case_id=None):
                 (test_case_id,)
             )
             steps = cursor.fetchall()
-            for step_num, (step, result) in enumerate(steps, start=1):
-                add_step(step_num)
-                steps_widgets[step_num - 1][0].insert(0, step)
-                steps_widgets[step_num - 1][1].insert(0, result)
+            for step_num, (step_number, step, result) in enumerate(steps, start=1):
+                add_step(step_num, step, result)
 
         con.close()
+
 
 def load_testcases():
     try:
