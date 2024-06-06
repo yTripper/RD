@@ -55,6 +55,7 @@ def save_testcase(name, description, steps):
 
         con.commit()
         print("[INFO] Test case saved successfully!")
+        refresh_testcases()  # Обновление списка тест-кейсов после сохранения
 
     except Exception as ex:
         print("[ERROR] Error while saving test case:", ex)
@@ -63,14 +64,84 @@ def save_testcase(name, description, steps):
             con.close()
             print("[INFO] PostgreSQL connection closed")
 
-def create_testcase_window(width=600, height=400):
+def update_testcase(test_case_id, name, description, steps):
+    con = None
+    try:
+        con = psycopg2.connect(
+            host=host,
+            user=db_user,
+            password=db_password,
+            database=db_name
+        )
+        with con.cursor() as cursor:
+            cursor.execute(
+                "UPDATE TestCases SET name = %s, description = %s WHERE id_case = %s;",
+                (name, description, test_case_id)
+            )
+            cursor.execute(
+                "DELETE FROM TestCaseSteps WHERE TestCaseID = %s;",
+                (test_case_id,)
+            )
+            for step_num, (step, result) in enumerate(steps, start=1):
+                cursor.execute(
+                    "INSERT INTO TestCaseSteps (StepNumber, ActionDescription, ExpectedResult, TestCaseID) "
+                    "VALUES (%s, %s, %s, %s);",
+                    (step_num, step, result, test_case_id)
+                )
+
+        con.commit()
+        print("[INFO] Test case updated successfully!")
+        refresh_testcases()  # Обновление списка тест-кейсов после обновления
+
+    except Exception as ex:
+        print("[ERROR] Error while updating test case:", ex)
+    finally:
+        if con:
+            con.close()
+            print("[INFO] PostgreSQL connection closed")
+
+def delete_testcase(test_case_id):
+    con = None
+    try:
+        con = psycopg2.connect(
+            host=host,
+            user=db_user,
+            password=db_password,
+            database=db_name
+        )
+        with con.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM TestCaseSteps WHERE TestCaseID = %s;",
+                (test_case_id,)
+            )
+            cursor.execute(
+                "DELETE FROM TestCases WHERE id_case = %s;",
+                (test_case_id,)
+            )
+
+        con.commit()
+        print("[INFO] Test case deleted successfully!")
+        refresh_testcases()  # Обновление списка тест-кейсов после удаления
+
+    except Exception as ex:
+        print("[ERROR] Error while deleting test case:", ex)
+    finally:
+        if con:
+            con.close()
+            print("[INFO] PostgreSQL connection closed")
+
+
+def create_testcase_window(test_case_id=None):
     def save_testcase_to_db():
         name = name_entry.get()
-        precondition = precondition_entry.get()
         description = description_entry.get()
         steps = [(step_entry.get(), result_entry.get()) for step_entry, result_entry in steps_widgets]
 
-        save_testcase(name, description, steps)
+        if test_case_id:
+            update_testcase(test_case_id, name, description, steps)
+        else:
+            save_testcase(name, description, steps)
+        testcase_window.destroy()
 
     def add_step(step_num):
         step_label = tk.Label(steps_frame, text=f"Шаг {step_num}:")
@@ -87,31 +158,26 @@ def create_testcase_window(width=600, height=400):
 
     testcase_window = tk.Toplevel(root)
     testcase_window.title("Создание тесткейса")
-    testcase_window.geometry(f"{width}x{height}")
 
     tk.Label(testcase_window, text="Название:").grid(row=0, column=0, sticky="w")
     name_entry = tk.Entry(testcase_window)
     name_entry.grid(row=0, column=1, padx=10, pady=5, sticky="we")
 
-    tk.Label(testcase_window, text="Предусловия:").grid(row=1, column=0, sticky="w")
-    precondition_entry = tk.Entry(testcase_window)
-    precondition_entry.grid(row=1, column=1, padx=10, pady=5, sticky="we")
-
-    tk.Label(testcase_window, text="Описание:").grid(row=2, column=0, sticky="w")
+    tk.Label(testcase_window, text="Описание:").grid(row=1, column=0, sticky="w")
     description_entry = tk.Entry(testcase_window)
-    description_entry.grid(row=2, column=1, padx=10, pady=5, sticky="we")
+    description_entry.grid(row=1, column=1, padx=10, pady=5, sticky="we")
 
     steps_frame = tk.Frame(testcase_window)
-    steps_frame.grid(row=3, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
+    steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
     add_step_button = tk.Button(testcase_window, text="Добавить шаг", command=lambda: add_step(num_steps[0] + 1))
-    add_step_button.grid(row=4, column=0, columnspan=2, pady=10)
+    add_step_button.grid(row=3, column=0, columnspan=2, pady=10)
 
     steps_widgets = []
     num_steps = [0]
 
     save_button = tk.Button(testcase_window, text="Сохранить", command=save_testcase_to_db)
-    save_button.grid(row=5, column=0, columnspan=2, pady=10)
+    save_button.grid(row=4, column=0, columnspan=2, pady=10)
 
     testcase_window.columnconfigure(1, weight=1)
     steps_frame.columnconfigure(1, weight=1)
@@ -119,6 +185,64 @@ def create_testcase_window(width=600, height=400):
     steps_frame.rowconfigure(num_steps[0] + 1, weight=1)
 
     description_entry.config(width=50)
+
+    # Если редактируем существующий тест-кейс, заполняем поля текущими значениями
+    if test_case_id:
+        con = psycopg2.connect(
+            host=host,
+            user=db_user,
+            password=db_password,
+            database=db_name
+        )
+        with con.cursor() as cursor:
+            cursor.execute(
+                "SELECT name, description FROM TestCases WHERE id_case = %s;", (test_case_id,)
+            )
+            name, description = cursor.fetchone()
+            name_entry.insert(0, name)
+            description_entry.insert(0, description)
+
+            cursor.execute(
+                "SELECT StepNumber, ActionDescription, ExpectedResult FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;",
+                (test_case_id,)
+            )
+            steps = cursor.fetchall()
+            for step_num, (step, result) in enumerate(steps, start=1):
+                add_step(step_num)
+                steps_widgets[step_num - 1][0].insert(0, step)
+                steps_widgets[step_num - 1][1].insert(0, result)
+
+        con.close()
+
+def load_testcases():
+    try:
+        con = psycopg2.connect(
+            host=host,
+            user=db_user,
+            password=db_password,
+            database=db_name
+        )
+        with con.cursor() as cursor:
+            cursor.execute("SELECT id_case, name, description FROM TestCases;")
+            testcases = cursor.fetchall()
+            return testcases
+    except Exception as ex:
+        print("[ERROR] Error while loading test cases:", ex)
+        return []
+    finally:
+        if con:
+            con.close()
+            print("[INFO] PostgreSQL connection closed")
+
+def refresh_testcases():
+    for widget in tab2_frame.winfo_children():
+        widget.destroy()
+
+    testcases = load_testcases()
+    for idx, (test_case_id, name, description) in enumerate(testcases):
+        tk.Label(tab2_frame, text=f"{name}").grid(row=idx, column=0, sticky="w")
+        tk.Button(tab2_frame, text="Редактировать", command=lambda tcid=test_case_id: create_testcase_window(tcid)).grid(row=idx, column=1, sticky="w")
+        tk.Button(tab2_frame, text="Удалить", command=lambda tcid=test_case_id: delete_testcase(tcid)).grid(row=idx, column=2, sticky="w")
 
 def create_error_message(message):
     error_window = tk.Toplevel()
@@ -300,6 +424,7 @@ def login():
 
 def main():
     global root
+    global tab2_frame
     root = tk.Tk()
     root.geometry("800x700")
     root.title("RED DWARF")
@@ -323,6 +448,11 @@ def main():
 
     button_create = tk.Button(frame_btn, text="Создать тест-кейс", command=create_testcase_window)
     button_create.pack(pady=5, padx=5)
+
+    tab2_frame = tk.Frame(tab2)
+    tab2_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    refresh_testcases()
 
     create_user_management_tab(tab_control)
 
