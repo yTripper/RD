@@ -1,5 +1,6 @@
 import tkinter as tk
 from database import get_db_connection, close_db_connection
+from PIL import Image, ImageTk
 
 # Functions to manage test cases
 def save_testcase(name, description, steps, refresh_testcases_callback, suite_id=None):
@@ -13,11 +14,11 @@ def save_testcase(name, description, steps, refresh_testcases_callback, suite_id
             )
             test_case_id = cursor.fetchone()[0]
 
-            for step_num, (step, result) in enumerate(steps, start=1):
+            for step_num, (step, result, status) in enumerate(steps, start=1):
                 cursor.execute(
-                    "INSERT INTO TestCaseSteps (StepNumber, ActionDescription, ExpectedResult, TestCaseID) "
-                    "VALUES (%s, %s, %s, %s);",
-                    (step_num, step, result, test_case_id)
+                    "INSERT INTO TestCaseSteps (StepNumber, ActionDescription, ExpectedResult, Status, TestCaseID) "
+                    "VALUES (%s, %s, %s, %s, %s);",
+                    (step_num, step, result, status, test_case_id)
                 )
             
             if suite_id:
@@ -48,11 +49,11 @@ def update_testcase(test_case_id, name, description, steps, refresh_testcases_ca
                 "DELETE FROM TestCaseSteps WHERE TestCaseID = %s;",
                 (test_case_id,)
             )
-            for step_num, (step, result) in enumerate(steps, start=1):
+            for step_num, (step, result, status) in enumerate(steps, start=1):
                 cursor.execute(
-                    "INSERT INTO TestCaseSteps (StepNumber, ActionDescription, ExpectedResult, TestCaseID) "
-                    "VALUES (%s, %s, %s, %s);",
-                    (step_num, step, result, test_case_id)
+                    "INSERT INTO TestCaseSteps (StepNumber, ActionDescription, ExpectedResult, Status, TestCaseID) "
+                    "VALUES (%s, %s, %s, %s, %s);",
+                    (step_num, step, result, status, test_case_id)
                 )
 
         con.commit()
@@ -116,7 +117,7 @@ def view_testcase(root, test_case_id):
             cursor.execute("SELECT name, description FROM TestCases WHERE id_case = %s;", (test_case_id,))
             testcase = cursor.fetchone()
 
-            cursor.execute("SELECT StepNumber, ActionDescription, ExpectedResult FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;", (test_case_id,))
+            cursor.execute("SELECT StepNumber, ActionDescription, ExpectedResult, Status FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;", (test_case_id,))
             steps = cursor.fetchall()
 
         view_window = tk.Toplevel(root)
@@ -131,15 +132,22 @@ def view_testcase(root, test_case_id):
         steps_frame = tk.Frame(view_window)
         steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
-        for step_num, (step_number, step, result) in enumerate(steps, start=1):
+        flags = []
+        for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
             tk.Label(steps_frame, text=f"Шаг {step_num}:").grid(row=step_num, column=0, sticky="w")
             tk.Label(steps_frame, text=step).grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
             tk.Label(steps_frame, text="Ожидаемый результат:").grid(row=step_num, column=2, sticky="w")
             tk.Label(steps_frame, text=result).grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
+            flag_image = ImageTk.PhotoImage(Image.open("img/green_flag.png" if status == "success" else "img/red_flag.png"))
+            flags.append(flag_image)
+            tk.Label(steps_frame, image=flag_image).grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
 
         steps_frame.columnconfigure(1, weight=1)
         steps_frame.columnconfigure(3, weight=1)
         steps_frame.rowconfigure(len(steps) + 1, weight=1)
+
+        # Maintain a reference to the images to prevent garbage collection
+        view_window.flags = flags
 
     except Exception as ex:
         print("[ERROR] Error while viewing test case:", ex)
@@ -150,7 +158,7 @@ def edit_testcase(root, test_case_id, refresh_testcases_callback):
     def save_edited_testcase():
         name = name_entry.get()
         description = description_entry.get()
-        steps = [(step_entry.get(), result_entry.get()) for step_entry, result_entry in steps_widgets]
+        steps = [(step_entry.get(), result_entry.get(), "success" if var.get() else "failure") for step_entry, result_entry, var in steps_widgets]
 
         con = None
         try:
@@ -162,11 +170,11 @@ def edit_testcase(root, test_case_id, refresh_testcases_callback):
                 )
 
                 cursor.execute("DELETE FROM TestCaseSteps WHERE TestCaseID = %s;", (test_case_id,))
-                for step_num, (step, result) in enumerate(steps, start=1):
+                for step_num, (step, result, status) in enumerate(steps, start=1):
                     cursor.execute(
-                        "INSERT INTO TestCaseSteps (StepNumber, ActionDescription, ExpectedResult, TestCaseID) "
-                        "VALUES (%s, %s, %s, %s);",
-                        (step_num, step, result, test_case_id)
+                        "INSERT INTO TestCaseSteps (StepNumber, ActionDescription, ExpectedResult, Status, TestCaseID) "
+                        "VALUES (%s, %s, %s, %s, %s);",
+                        (step_num, step, result, status, test_case_id)
                     )
 
             con.commit()
@@ -186,7 +194,7 @@ def edit_testcase(root, test_case_id, refresh_testcases_callback):
             cursor.execute("SELECT name, description FROM TestCases WHERE id_case = %s;", (test_case_id,))
             testcase = cursor.fetchone()
 
-            cursor.execute("SELECT StepNumber, ActionDescription, ExpectedResult FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;", (test_case_id,))
+            cursor.execute("SELECT StepNumber, ActionDescription, ExpectedResult, Status FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;", (test_case_id,))
             steps = cursor.fetchall()
 
         edit_window = tk.Toplevel(root)
@@ -206,7 +214,7 @@ def edit_testcase(root, test_case_id, refresh_testcases_callback):
         steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
         steps_widgets = []
-        for step_num, (step_number, step, result) in enumerate(steps, start=1):
+        for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
             step_label = tk.Label(steps_frame, text=f"Шаг {step_num}:")
             step_label.grid(row=step_num, column=0, sticky="w")
             step_entry = tk.Entry(steps_frame, width=50)
@@ -217,7 +225,10 @@ def edit_testcase(root, test_case_id, refresh_testcases_callback):
             result_entry = tk.Entry(steps_frame, width=50)
             result_entry.insert(0, result)
             result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-            steps_widgets.append((step_entry, result_entry))
+            var = tk.BooleanVar(value=status == "success")
+            status_check = tk.Checkbutton(steps_frame, variable=var, onvalue=True, offvalue=False)
+            status_check.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
+            steps_widgets.append((step_entry, result_entry, var))
 
         steps_frame.columnconfigure(1, weight=1)
         steps_frame.columnconfigure(3, weight=1)
@@ -312,7 +323,7 @@ def create_testcase_window(root, refresh_testcases_callback, suite_id, test_case
     def save_testcase_to_db():
         name = name_entry.get()
         description = description_entry.get()
-        steps = [(step_entry.get(), result_entry.get()) for step_entry, result_entry in steps_widgets]
+        steps = [(step_entry.get(), result_entry.get(), "success" if var.get() else "failure") for step_entry, result_entry, var in steps_widgets]
 
         if test_case_id:
             update_testcase(test_case_id, name, description, steps, refresh_testcases_callback)
@@ -320,7 +331,7 @@ def create_testcase_window(root, refresh_testcases_callback, suite_id, test_case
             save_testcase(name, description, steps, refresh_testcases_callback, suite_id)
         testcase_window.destroy()
 
-    def add_step(step_num, step="", result=""):
+    def add_step(step_num, step="", result="", status="failure"):
         step_label = tk.Label(steps_frame, text=f"Шаг {step_num}:")
         step_label.grid(row=step_num, column=0, sticky="w")
         step_entry = tk.Entry(steps_frame, width=50)
@@ -331,8 +342,11 @@ def create_testcase_window(root, refresh_testcases_callback, suite_id, test_case
         result_entry = tk.Entry(steps_frame, width=50)
         result_entry.insert(0, result)
         result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
+        var = tk.BooleanVar(value=status == "success")
+        status_check = tk.Checkbutton(steps_frame, variable=var, onvalue=True, offvalue=False)
+        status_check.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
 
-        steps_widgets.append((step_entry, result_entry))
+        steps_widgets.append((step_entry, result_entry, var))
         num_steps[0] += 1
 
     testcase_window = tk.Toplevel(root)
@@ -377,12 +391,12 @@ def create_testcase_window(root, refresh_testcases_callback, suite_id, test_case
             description_entry.insert(0, description)
 
             cursor.execute(
-                "SELECT StepNumber, ActionDescription, ExpectedResult FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;",
+                "SELECT StepNumber, ActionDescription, ExpectedResult, Status FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;",
                 (test_case_id,)
             )
             steps = cursor.fetchall()
-            for step_num, (step_number, step, result) in enumerate(steps, start=1):
-                add_step(step_num, step, result)
+            for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
+                add_step(step_num, step, result, status)
 
         close_db_connection(con)
 
