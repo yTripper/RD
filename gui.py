@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
-from testcase_management import save_testcase, update_testcase, delete_testcase, view_testcase, edit_testcase, load_testcases, create_testcase_window, create_testsuite_window, refresh_testsuites
+from testcase_management import save_testcase, update_testcase, delete_testcase, view_testcase, edit_testcase, load_testcases, create_testcase_window, create_testsuite_window, refresh_testsuites, load_testsuites, delete_testsuite
 from user_management import check_credentials, current_user_role_id, get_current_user_role_id
 import psycopg2
 from config import host, user as db_user, password as db_password, db_name
@@ -188,3 +188,167 @@ def create_user_management_tab(root, tab_control):
     delete_user_button.pack(side=tk.LEFT, padx=10, pady=10)
 
     refresh_user_list()
+
+def create_base_tab(root, tab_control):
+    def load_testsuites():
+        try:
+            con = psycopg2.connect(
+                host=host,
+                user=db_user,
+                password=db_password,
+                database=db_name
+            )
+            with con.cursor() as cursor:
+                cursor.execute("SELECT suite_id, suite_name, description FROM TestSuites;")
+                testsuites = cursor.fetchall()
+                return testsuites
+        except Exception as ex:
+            print("[ERROR] Error while loading test suites:", ex)
+            return []
+        finally:
+            if con:
+                con.close()
+                print("[INFO] PostgreSQL connection closed")
+
+    def refresh_testsuite_list():
+        for row in testsuite_tree.get_children():
+            testsuite_tree.delete(row)
+        testsuites = load_testsuites()
+        for testsuite in testsuites:
+            testsuite_tree.insert("", "end", values=testsuite)
+
+    def add_testsuite():
+        create_testsuite_window(root, refresh_testsuite_list)
+
+    def edit_selected_testsuite():
+        selected_item = testsuite_tree.selection()
+        if not selected_item:
+            return
+        suite_id = testsuite_tree.item(selected_item)["values"][0]
+        create_testsuite_window(root, refresh_testsuite_list, suite_id)
+
+    def view_selected_testsuite():
+        selected_item = testsuite_tree.selection()
+        if not selected_item:
+            return
+        suite_id = testsuite_tree.item(selected_item)["values"][0]
+        show_testcases(root, suite_id)
+
+    def delete_selected_testsuite():
+        selected_item = testsuite_tree.selection()
+        if not selected_item:
+            return
+        suite_id = testsuite_tree.item(selected_item)["values"][0]
+        delete_testsuite(suite_id, refresh_testsuite_list)
+
+    if get_current_user_role_id() != 1:
+        return
+
+    base_tab = ttk.Frame(tab_control)
+    tab_control.add(base_tab, text="База")
+
+    testsuite_tree = ttk.Treeview(base_tab, columns=("id", "name", "description"), show="headings")
+    testsuite_tree.heading("id", text="ID")
+    testsuite_tree.heading("name", text="Название набора")
+    testsuite_tree.heading("description", text="Описание")
+    testsuite_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    button_frame = tk.Frame(base_tab)
+    button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+
+   ### Обновленный `gui.py` (продолжение):
+    view_button = tk.Button(button_frame, text="Просмотр", command=view_selected_testsuite)
+    view_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    edit_button = tk.Button(button_frame, text="Редактировать", command=edit_selected_testsuite)
+    edit_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    delete_button = tk.Button(button_frame, text="Удалить", command=delete_selected_testsuite)
+    delete_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    add_button = tk.Button(button_frame, text="Добавить", command=add_testsuite)
+    add_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    refresh_testsuite_list()
+
+def show_testcases(root, suite_id):
+    testcase_window = tk.Toplevel(root)
+    testcase_window.title("Тест-кейсы набора")
+
+    def load_testcases():
+        try:
+            con = psycopg2.connect(
+                host=host,
+                user=db_user,
+                password=db_password,
+                database=db_name
+            )
+            with con.cursor() as cursor:
+                cursor.execute(
+                    "SELECT id_case, name, description FROM TestCases WHERE id_case IN "
+                    "(SELECT case_id FROM TestSuiteCases WHERE suite_id = %s);",
+                    (suite_id,)
+                )
+                testcases = cursor.fetchall()
+                return testcases
+        except Exception as ex:
+            print("[ERROR] Error while loading test cases:", ex)
+            return []
+        finally:
+            if con:
+                con.close()
+                print("[INFO] PostgreSQL connection closed")
+
+    def refresh_testcase_list():
+        for row in testcase_tree.get_children():
+            testcase_tree.delete(row)
+        testcases = load_testcases()
+        for testcase in testcases:
+            testcase_tree.insert("", "end", values=testcase)
+
+    def add_testcase():
+        create_testcase_window(testcase_window, refresh_testcase_list, suite_id)
+
+    def edit_selected_testcase():
+        selected_item = testcase_tree.selection()
+        if not selected_item:
+            return
+        test_case_id = testcase_tree.item(selected_item)["values"][0]
+        edit_testcase(testcase_window, test_case_id, refresh_testcase_list)
+
+    def view_selected_testcase():
+        selected_item = testcase_tree.selection()
+        if not selected_item:
+            return
+        test_case_id = testcase_tree.item(selected_item)["values"][0]
+        view_testcase(testcase_window, test_case_id)
+
+    def delete_selected_testcase():
+        selected_item = testcase_tree.selection()
+        if not selected_item:
+            return
+        test_case_id = testcase_tree.item(selected_item)["values"][0]
+        delete_testcase(test_case_id, refresh_testcase_list)
+
+    testcase_tree = ttk.Treeview(testcase_window, columns=("id", "name", "description"), show="headings")
+    testcase_tree.heading("id", text="ID")
+    testcase_tree.heading("name", text="Название")
+    testcase_tree.heading("description", text="Описание")
+    testcase_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    button_frame = tk.Frame(testcase_window)
+    button_frame.pack(side=tk.BOTTOM, fill=tk.X)
+
+    view_button = tk.Button(button_frame, text="Просмотр", command=view_selected_testcase)
+    view_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    edit_button = tk.Button(button_frame, text="Редактировать", command=edit_selected_testcase)
+    edit_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    delete_button = tk.Button(button_frame, text="Удалить", command=delete_selected_testcase)
+    delete_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    add_button = tk.Button(button_frame, text="Добавить", command=add_testcase)
+    add_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    refresh_testcase_list()

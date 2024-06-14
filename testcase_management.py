@@ -70,18 +70,9 @@ def delete_testcase(test_case_id, refresh_testcases_callback):
     try:
         con = get_db_connection()
         with con.cursor() as cursor:
-            cursor.execute(
-                "DELETE FROM TestCaseSteps WHERE TestCaseID = %s;",
-                (test_case_id,)
-            )
-            cursor.execute(
-                "DELETE FROM TestSuiteCases WHERE case_id = %s;",
-                (test_case_id,)
-            )
-            cursor.execute(
-                "DELETE FROM TestCases WHERE id_case = %s;",
-                (test_case_id,)
-            )
+            cursor.execute("DELETE FROM TestCaseSteps WHERE TestCaseID = %s;", (test_case_id,))
+            cursor.execute("DELETE FROM TestSuiteCases WHERE case_id = %s;", (test_case_id,))
+            cursor.execute("DELETE FROM TestCases WHERE id_case = %s;", (test_case_id,))
 
         con.commit()
         print("[INFO] Test case deleted successfully!")

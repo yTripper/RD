@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
-from gui import create_user_management_tab, create_error_message
+from gui import create_user_management_tab, create_error_message, create_base_tab
 from testcase_management import create_testsuite_window, refresh_testsuites, show_testcases
 from user_management import check_credentials, current_user_role_id
 
@@ -48,21 +48,8 @@ def main():
     label1.image = photo
     label1.pack(pady=10, padx=10)
 
-    tab2 = ttk.Frame(tab_control)
-    tab_control.add(tab2, text="База")
-
-    frame_btn = tk.Frame(tab2)
-    frame_btn.pack(side=tk.LEFT, anchor=tk.NW, padx=10, pady=10)
-
-    button_create_suite = tk.Button(frame_btn, text="Создать набор тест-кейсов", command=lambda: create_testsuite_window(root, lambda: refresh_testsuites(root, tab2_frame, show_testcases)))
-    button_create_suite.pack(pady=5, padx=5)
-
-    tab2_frame = tk.Frame(tab2)
-    tab2_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-    refresh_testsuites(root, tab2_frame, show_testcases)
-
     create_user_management_tab(root, tab_control)
+    create_base_tab(root, tab_control)
 
     tab_control.pack(expand=1, fill="both")
     root.mainloop()
