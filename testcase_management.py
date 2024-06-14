@@ -1,6 +1,6 @@
 import tkinter as tk
+from tkinter import ttk
 from database import get_db_connection, close_db_connection
-from PIL import Image, ImageTk
 
 # Functions to manage test cases
 def save_testcase(name, description, steps, refresh_testcases_callback, suite_id=None):
@@ -132,33 +132,43 @@ def view_testcase(root, test_case_id):
         steps_frame = tk.Frame(view_window)
         steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
-        flags = []
         for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
             tk.Label(steps_frame, text=f"Шаг {step_num}:").grid(row=step_num, column=0, sticky="w")
             tk.Label(steps_frame, text=step).grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
             tk.Label(steps_frame, text="Ожидаемый результат:").grid(row=step_num, column=2, sticky="w")
             tk.Label(steps_frame, text=result).grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-            flag_image = ImageTk.PhotoImage(Image.open("img/green_flag.png" if status == "success" else "img/red_flag.png"))
-            flags.append(flag_image)
-            tk.Label(steps_frame, image=flag_image).grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
+            status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame))
+            status_button.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
 
         steps_frame.columnconfigure(1, weight=1)
         steps_frame.columnconfigure(3, weight=1)
         steps_frame.rowconfigure(len(steps) + 1, weight=1)
-
-        # Maintain a reference to the images to prevent garbage collection
-        view_window.flags = flags
 
     except Exception as ex:
         print("[ERROR] Error while viewing test case:", ex)
     finally:
         close_db_connection(con)
 
+def change_status(step_num, steps_frame):
+    status_window = tk.Toplevel(steps_frame)
+    status_window.title("Изменить статус")
+
+    def set_status(new_status):
+        button = steps_frame.grid_slaves(row=step_num, column=4)[0]
+        button.config(text=new_status)
+        status_window.destroy()
+
+    statuses = [("Успешен", "green"), ("Пропущен", "yellow"), ("Провален", "red"), ("Заблокирован", "grey")]
+
+    for idx, (status, color) in enumerate(statuses):
+        button = tk.Button(status_window, text=status, bg=color, command=lambda s=status: set_status(s))
+        button.grid(row=idx, column=0, padx=5, pady=5, sticky="we")
+
 def edit_testcase(root, test_case_id, refresh_testcases_callback):
     def save_edited_testcase():
         name = name_entry.get()
         description = description_entry.get()
-        steps = [(step_entry.get(), result_entry.get(), "success" if var.get() else "failure") for step_entry, result_entry, var in steps_widgets]
+        steps = [(step_entry.get(), result_entry.get(), status_button.cget("text")) for step_entry, result_entry, status_button in steps_widgets]
 
         con = None
         try:
@@ -225,10 +235,9 @@ def edit_testcase(root, test_case_id, refresh_testcases_callback):
             result_entry = tk.Entry(steps_frame, width=50)
             result_entry.insert(0, result)
             result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-            var = tk.BooleanVar(value=status == "success")
-            status_check = tk.Checkbutton(steps_frame, variable=var, onvalue=True, offvalue=False)
-            status_check.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
-            steps_widgets.append((step_entry, result_entry, var))
+            status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame))
+            status_button.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
+            steps_widgets.append((step_entry, result_entry, status_button))
 
         steps_frame.columnconfigure(1, weight=1)
         steps_frame.columnconfigure(3, weight=1)
@@ -323,7 +332,7 @@ def create_testcase_window(root, refresh_testcases_callback, suite_id, test_case
     def save_testcase_to_db():
         name = name_entry.get()
         description = description_entry.get()
-        steps = [(step_entry.get(), result_entry.get(), "success" if var.get() else "failure") for step_entry, result_entry, var in steps_widgets]
+        steps = [(step_entry.get(), result_entry.get(), status_button.cget("text")) for step_entry, result_entry, status_button in steps_widgets]
 
         if test_case_id:
             update_testcase(test_case_id, name, description, steps, refresh_testcases_callback)
@@ -331,7 +340,7 @@ def create_testcase_window(root, refresh_testcases_callback, suite_id, test_case
             save_testcase(name, description, steps, refresh_testcases_callback, suite_id)
         testcase_window.destroy()
 
-    def add_step(step_num, step="", result="", status="failure"):
+    def add_step(step_num, step="", result="", status="Не задан"):
         step_label = tk.Label(steps_frame, text=f"Шаг {step_num}:")
         step_label.grid(row=step_num, column=0, sticky="w")
         step_entry = tk.Entry(steps_frame, width=50)
@@ -342,11 +351,10 @@ def create_testcase_window(root, refresh_testcases_callback, suite_id, test_case
         result_entry = tk.Entry(steps_frame, width=50)
         result_entry.insert(0, result)
         result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-        var = tk.BooleanVar(value=status == "success")
-        status_check = tk.Checkbutton(steps_frame, variable=var, onvalue=True, offvalue=False)
-        status_check.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
+        status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame))
+        status_button.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
 
-        steps_widgets.append((step_entry, result_entry, var))
+        steps_widgets.append((step_entry, result_entry, status_button))
         num_steps[0] += 1
 
     testcase_window = tk.Toplevel(root)

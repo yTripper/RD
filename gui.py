@@ -73,7 +73,7 @@ def create_user_management_tab(root, tab_control):
 
         add_user_window = tk.Toplevel(root)
         add_user_window.title("Добавить пользователя")
-        add_user_window.geometry("300x200")
+        add_user_window.geometry("500x300")
 
         tk.Label(add_user_window, text="Имя пользователя:").pack(pady=5)
         username_entry = tk.Entry(add_user_window)
