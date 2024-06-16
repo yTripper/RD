@@ -106,14 +106,14 @@ def load_testcases(suite_id):
         close_db_connection(con)
 
 
-def change_status(step_num, steps_frame, test_case_id, user_id):
+def change_status(step_num, steps_frame, test_case_id, user_id, step_statuses):
     status_window = tk.Toplevel(steps_frame)
     status_window.title("Изменить статус")
 
     def set_status(new_status):
         button = steps_frame.grid_slaves(row=step_num, column=4)[0]
         button.config(text=new_status)
-        save_test_run(test_case_id, user_id, new_status)
+        step_statuses[step_num] = new_status
         status_window.destroy()
 
     statuses = [("Успешен", "green"), ("Пропущен", "yellow"), ("Провален", "red"), ("Заблокирован", "grey")]
@@ -121,8 +121,6 @@ def change_status(step_num, steps_frame, test_case_id, user_id):
     for idx, (status, color) in enumerate(statuses):
         button = tk.Button(status_window, text=status, bg=color, command=lambda s=status: set_status(s))
         button.grid(row=idx, column=0, padx=5, pady=5, sticky="we")
-
-
 
 
 def edit_testcase(root, test_case_id, refresh_testcases_callback):
@@ -458,39 +456,29 @@ def refresh_testcases(testcases_window, suite_id):
         tk.Button(testcases_window, text="Редактировать", command=lambda tcid=test_case_id: create_testcase_window(testcases_window, lambda: refresh_testcases(testcases_window, suite_id), suite_id, tcid)).grid(row=idx + 1, column=2, sticky="w")
         tk.Button(testcases_window, text="Удалить", command=lambda tcid=test_case_id: delete_testcase(tcid, lambda: refresh_testcases(testcases_window, suite_id))).grid(row=idx + 1, column=3, sticky="w")
 
-def save_test_run(test_case_id, user_id, status):
+def save_test_run(test_case_id, user_id, status, step_statuses):
     con = None
     try:
         con = get_db_connection()
         with con.cursor() as cursor:
-            # Убедитесь, что выполняется только один раз для каждого тест-кейса
             cursor.execute(
-                "SELECT id_run FROM TestRuns WHERE testcase_id = %s AND user_id = %s;",
-                (test_case_id, user_id)
+                "INSERT INTO TestRuns (testcase_id, user_id, status) VALUES (%s, %s, %s) RETURNING id_run;",
+                (test_case_id, user_id, status)
             )
-            existing_run = cursor.fetchone()
+            test_run_id = cursor.fetchone()[0]
 
-            if existing_run:
-                # Обновите существующую запись, если она уже существует
+            for step_num, step_status in step_statuses.items():
                 cursor.execute(
-                    "UPDATE TestRuns SET status = %s, execution_date = NOW() WHERE id_run = %s;",
-                    (status, existing_run[0])
+                    "UPDATE TestCaseSteps SET Status = %s WHERE TestCaseID = %s AND StepNumber = %s;",
+                    (step_status, test_case_id, step_num)
                 )
-            else:
-                # Создайте новую запись, если её ещё нет
-                cursor.execute(
-                    "INSERT INTO TestRuns (testcase_id, user_id, status) VALUES (%s, %s, %s);",
-                    (test_case_id, user_id, status)
-                )
+
         con.commit()
         print("[INFO] Test run saved successfully!")
     except Exception as ex:
         print("[ERROR] Error while saving test run:", ex)
     finally:
         close_db_connection(con)
-
-
-
 
 
 # Обновление функции view_testcase с добавлением кнопки "Завершить"
@@ -518,24 +506,21 @@ def view_testcase(root, test_case_id):
         steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
         user_id = get_current_user_role_id()
+        step_statuses = {}
 
         for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
             tk.Label(steps_frame, text=f"Шаг {step_num}:").grid(row=step_num, column=0, sticky="w")
             tk.Label(steps_frame, text=step).grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
             tk.Label(steps_frame, text="Ожидаемый результат:").grid(row=step_num, column=2, sticky="w")
             tk.Label(steps_frame, text=result).grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-            status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame, test_case_id, user_id))
+            status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame, test_case_id, user_id, step_statuses))
             status_button.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
 
         steps_frame.columnconfigure(1, weight=1)
         steps_frame.columnconfigure(3, weight=1)
         steps_frame.rowconfigure(len(steps) + 1, weight=1)
 
-        def finish_testcase():
-            save_test_run(test_case_id, user_id, "Успешен")
-            refresh_test_runs(view_window)
-
-        finish_button = tk.Button(view_window, text="Завершить", command=finish_testcase)
+        finish_button = tk.Button(view_window, text="Завершить", command=lambda: finish_testcase(view_window, test_case_id, user_id, step_statuses))
         finish_button.grid(row=3, column=0, columnspan=2, pady=10)
 
     except Exception as ex:
@@ -544,6 +529,9 @@ def view_testcase(root, test_case_id):
         close_db_connection(con)
 
 
+def finish_testcase(view_window, test_case_id, user_id, step_statuses):
+    save_test_run(test_case_id, user_id, "Завершен", step_statuses)
+    refresh_test_runs(view_window)
 
 
 
@@ -685,6 +673,7 @@ def view_testcase_run(tab2_frame, test_run_id):
         print("[ERROR] Error while viewing test case run:", ex)
     finally:
         close_db_connection(con)
+
 
 
 
