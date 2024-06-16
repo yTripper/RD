@@ -360,27 +360,14 @@ def create_test_run_tab(root, tab_control):
     test_run_tab = ttk.Frame(tab_control)
     tab_control.add(test_run_tab, text="Пройденные тесты")
 
-    tab2_frame = tk.Frame(test_run_tab)
-    tab2_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+    frame_btn = tk.Frame(test_run_tab)
+    frame_btn.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
-    refresh_test_runs(tab2_frame)
-
-def refresh_test_runs(tab2_frame):
-    for widget in tab2_frame.winfo_children():
-        widget.destroy()
-
-    test_runs = load_test_runs()
-    for idx, (id_run, suite_name, case_name, status, execution_date) in enumerate(test_runs):
-        tk.Label(tab2_frame, text=f"{suite_name} - {case_name}").grid(row=idx, column=0, sticky="w")
-        tk.Label(tab2_frame, text=status).grid(row=idx, column=1, sticky="w")
-        tk.Label(tab2_frame, text=execution_date).grid(row=idx, column=2, sticky="w")
-
-def create_test_run_tab(root, tab_control):
-    test_run_tab = ttk.Frame(tab_control)
-    tab_control.add(test_run_tab, text="Пройденные тесты")
+    button_refresh = tk.Button(frame_btn, text="Обновить", command=lambda: refresh_test_runs(tab2_frame))
+    button_refresh.grid(row=0, column=0, pady=5, padx=5)
 
     tab2_frame = tk.Frame(test_run_tab)
-    tab2_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+    tab2_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
     refresh_test_runs(tab2_frame)
 
@@ -422,6 +409,10 @@ def refresh_test_runs(tab2_frame):
 
     delete_button = tk.Button(button_frame, text="Удалить", command=delete_selected_testcase)
     delete_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+    refresh_button = tk.Button(button_frame, text="Обновить", command=lambda: refresh_test_runs(tab2_frame))
+    refresh_button.pack(side=tk.LEFT, padx=5, pady=5)
+
 
 def load_test_runs_suites():
     try:
