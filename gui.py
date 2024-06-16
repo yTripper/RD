@@ -367,8 +367,6 @@ def create_test_run_tab(root, tab_control):
     tab2_frame = tk.Frame(test_run_tab)
     tab2_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
-    button_refresh = tk.Button(frame_btn, text="Обновить", command=lambda: refresh_test_runs(tab2_frame))
-    button_refresh.grid(row=0, column=0, pady=5, padx=5)
 
     refresh_test_runs(tab2_frame)
 

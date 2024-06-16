@@ -490,6 +490,12 @@ def view_testcase(root, test_case_id):
             cursor.execute("SELECT name, description FROM TestCases WHERE id_case = %s;", (test_case_id,))
             testcase = cursor.fetchone()
 
+            # Сбрасываем статусы шагов перед просмотром тест-кейса
+            cursor.execute(
+                "UPDATE TestCaseSteps SET Status = 'Не задан' WHERE TestCaseID = %s;",
+                (test_case_id,)
+            )
+
             cursor.execute("SELECT StepNumber, ActionDescription, ExpectedResult, Status FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;", (test_case_id,))
             steps = cursor.fetchall()
 
@@ -527,6 +533,7 @@ def view_testcase(root, test_case_id):
         print("[ERROR] Error while viewing test case:", ex)
     finally:
         close_db_connection(con)
+
 
 
 def finish_testcase(view_window, test_case_id, user_id, step_statuses):
