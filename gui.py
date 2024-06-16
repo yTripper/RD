@@ -194,159 +194,6 @@ def create_user_management_tab(root, tab_control):
 
     refresh_user_list()
 
-    def refresh_user_list():
-        for row in user_tree.get_children():
-            user_tree.delete(row)
-        users = load_users()
-        for user in users:
-            user_tree.insert("", "end", values=user)
-
-    def add_user():
-        def save_new_user():
-            username = username_entry.get()
-            password = password_entry.get()
-            role_id = int(role_id_entry.get())
-            try:
-                con = psycopg2.connect(
-                    host=host,
-                    user=db_user,
-                    password=db_password,
-                    database=db_name
-                )
-                with con.cursor() as cursor:
-                    cursor.execute(
-                        "INSERT INTO Users (username, password, role_id) VALUES (%s, %s, %s);",
-                        (username, password, role_id)
-                    )
-                con.commit()
-                refresh_user_list()
-                add_user_window.destroy()
-                print("[INFO] New user added successfully!")
-            except Exception as ex:
-                print("[ERROR] Error while adding new user:", ex)
-            finally:
-                if con:
-                    con.close()
-                    print("[INFO] PostgreSQL connection closed")
-
-        add_user_window = tk.Toplevel(root)
-        add_user_window.title("Добавить пользователя")
-        add_user_window.geometry("500x300")
-
-        tk.Label(add_user_window, text="Имя пользователя:").pack(pady=5)
-        username_entry = tk.Entry(add_user_window)
-        username_entry.pack(pady=5)
-
-        tk.Label(add_user_window, text="Пароль:").pack(pady=5)
-        password_entry = tk.Entry(add_user_window)
-        password_entry.pack(pady=5)
-
-        tk.Label(add_user_window, text="Роль (ID):").pack(pady=5)
-        role_id_entry = tk.Entry(add_user_window)
-        role_id_entry.pack(pady=5)
-
-        save_button = tk.Button(add_user_window, text="Сохранить", command=save_new_user)
-        save_button.pack(pady=10)
-
-    def edit_user_password():
-        selected_item = user_tree.selection()
-        if not selected_item:
-            return
-
-        user_id = user_tree.item(selected_item)["values"][0]
-
-        def save_new_password():
-            new_password = new_password_entry.get()
-            try:
-                con = psycopg2.connect(
-                    host=host,
-                    user=db_user,
-                    password=db_password,
-                    database=db_name
-                )
-                with con.cursor() as cursor:
-                    cursor.execute(
-                        "UPDATE Users SET password = %s WHERE id_users = %s;",
-                        (new_password, user_id)
-                    )
-                con.commit()
-                refresh_user_list()
-                edit_password_window.destroy()
-                print("[INFO] Password updated successfully!")
-            except Exception as ex:
-                print("[ERROR] Error while updating password:", ex)
-            finally:
-                if con:
-                    con.close()
-                    print("[INFO] PostgreSQL connection closed")
-
-        edit_password_window = tk.Toplevel(root)
-        edit_password_window.title("Изменить пароль")
-        edit_password_window.geometry("300x150")
-
-        tk.Label(edit_password_window, text="Новый пароль:").pack(pady=5)
-        new_password_entry = tk.Entry(edit_password_window)
-        new_password_entry.pack(pady=5)
-
-        save_button = tk.Button(edit_password_window, text="Сохранить", command=save_new_password)
-        save_button.pack(pady=10)
-
-    def delete_user():
-        selected_item = user_tree.selection()
-        if not selected_item:
-            return
-
-        user_id = user_tree.item(selected_item)["values"][0]
-
-        try:
-            con = psycopg2.connect(
-                host=host,
-                user=db_user,
-                password=db_password,
-                database=db_name
-            )
-            with con.cursor() as cursor:
-                cursor.execute(
-                    "DELETE FROM Users WHERE id_users = %s;",
-                    (user_id,)
-                )
-            con.commit()
-            refresh_user_list()
-            print("[INFO] User deleted successfully!")
-        except Exception as ex:
-            print("[ERROR] Error while deleting user:", ex)
-        finally:
-            if con:
-                con.close()
-                print("[INFO] PostgreSQL connection closed")
-
-    if get_current_user_role_id() != 1:
-        return
-
-    user_management_tab = ttk.Frame(tab_control)
-    tab_control.add(user_management_tab, text="Управление пользователями")
-
-    user_tree = ttk.Treeview(user_management_tab, columns=("id", "username", "password", "role"), show="headings")
-    user_tree.heading("id", text="ID")
-    user_tree.heading("username", text="Имя пользователя")
-    user_tree.heading("password", text="Пароль")
-    user_tree.heading("role", text="Роль")
-    user_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-    refresh_button = tk.Button(user_management_tab, text="Обновить", command=refresh_user_list)
-    refresh_button.pack(side=tk.LEFT, padx=10, pady=10)
-
-    add_user_button = tk.Button(user_management_tab, text="Добавить пользователя", command=add_user)
-    add_user_button.pack(side=tk.LEFT, padx=10, pady=10)
-
-    edit_password_button = tk.Button(user_management_tab, text="Изменить пароль", command=edit_user_password)
-    edit_password_button.pack(side=tk.LEFT, padx=10, pady=10)
-
-    delete_user_button = tk.Button(user_management_tab, text="Удалить пользователя", command=delete_user)
-    delete_user_button.pack(side=tk.LEFT, padx=10, pady=10)
-
-    refresh_user_list()
-
 def create_base_tab(root, tab_control):
     def load_testsuites():
         try:
@@ -510,9 +357,20 @@ def show_testcases(root, suite_id):
 
     refresh_testcase_list()
 
-from testcase_management import save_testcase, update_testcase, delete_testcase, view_testcase, edit_testcase, load_testcases, create_testcase_window, create_testsuite_window, refresh_testsuites, load_testsuites, delete_testsuite, load_test_runs
+def create_test_run_tab(root, tab_control):
+    test_run_tab = ttk.Frame(tab_control)
+    tab_control.add(test_run_tab, text="Пройденные тесты")
 
+    frame_btn = tk.Frame(test_run_tab)
+    frame_btn.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
+    tab2_frame = tk.Frame(test_run_tab)
+    tab2_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+
+    button_refresh = tk.Button(frame_btn, text="Обновить", command=lambda: refresh_test_runs(tab2_frame))
+    button_refresh.grid(row=0, column=0, pady=5, padx=5)
+
+    refresh_test_runs(tab2_frame)
 
 def load_test_runs_suites():
     try:
@@ -569,18 +427,3 @@ def show_test_runs(tab2_frame, suite_id):
 
     delete_button = tk.Button(button_frame, text="Удалить", command=delete_selected_testcase)
     delete_button.pack(side=tk.LEFT, padx=5, pady=5)
-
-def create_test_run_tab(root, tab_control):
-    test_run_tab = ttk.Frame(tab_control)
-    tab_control.add(test_run_tab, text="Пройденные тесты")
-
-    frame_btn = tk.Frame(test_run_tab)
-    frame_btn.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-
-    button_refresh = tk.Button(frame_btn, text="Обновить", command=lambda: refresh_test_runs(tab2_frame))
-    button_refresh.grid(row=0, column=0, pady=5, padx=5)
-
-    tab2_frame = tk.Frame(test_run_tab)
-    tab2_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
-
-    refresh_test_runs(tab2_frame)

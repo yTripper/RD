@@ -124,6 +124,7 @@ def change_status(step_num, steps_frame, test_case_id, user_id):
 
 
 
+
 def edit_testcase(root, test_case_id, refresh_testcases_callback):
     def save_edited_testcase():
         name = name_entry.get()
@@ -462,16 +463,33 @@ def save_test_run(test_case_id, user_id, status):
     try:
         con = get_db_connection()
         with con.cursor() as cursor:
+            # Убедитесь, что выполняется только один раз для каждого тест-кейса
             cursor.execute(
-                "INSERT INTO TestRuns (testcase_id, user_id, status) VALUES (%s, %s, %s);",
-                (test_case_id, user_id, status)
+                "SELECT id_run FROM TestRuns WHERE testcase_id = %s AND user_id = %s;",
+                (test_case_id, user_id)
             )
+            existing_run = cursor.fetchone()
+
+            if existing_run:
+                # Обновите существующую запись, если она уже существует
+                cursor.execute(
+                    "UPDATE TestRuns SET status = %s, execution_date = NOW() WHERE id_run = %s;",
+                    (status, existing_run[0])
+                )
+            else:
+                # Создайте новую запись, если её ещё нет
+                cursor.execute(
+                    "INSERT INTO TestRuns (testcase_id, user_id, status) VALUES (%s, %s, %s);",
+                    (test_case_id, user_id, status)
+                )
         con.commit()
         print("[INFO] Test run saved successfully!")
     except Exception as ex:
         print("[ERROR] Error while saving test run:", ex)
     finally:
         close_db_connection(con)
+
+
 
 
 
@@ -499,7 +517,7 @@ def view_testcase(root, test_case_id):
         steps_frame = tk.Frame(view_window)
         steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
-        user_id = get_current_user_role_id()  # Получение текущего пользователя
+        user_id = get_current_user_role_id()
 
         for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
             tk.Label(steps_frame, text=f"Шаг {step_num}:").grid(row=step_num, column=0, sticky="w")
@@ -513,11 +531,9 @@ def view_testcase(root, test_case_id):
         steps_frame.columnconfigure(3, weight=1)
         steps_frame.rowconfigure(len(steps) + 1, weight=1)
 
-        # Добавление кнопки "Завершить"
         def finish_testcase():
-            user_id = get_current_user_role_id()  # Получение текущего пользователя
-            save_test_run(test_case_id, user_id, "Успешен")  # Статус можно изменить на нужный
-            refresh_test_runs(view_window)  # Обновление пройденных тестов
+            save_test_run(test_case_id, user_id, "Успешен")
+            refresh_test_runs(view_window)
 
         finish_button = tk.Button(view_window, text="Завершить", command=finish_testcase)
         finish_button.grid(row=3, column=0, columnspan=2, pady=10)
@@ -526,6 +542,8 @@ def view_testcase(root, test_case_id):
         print("[ERROR] Error while viewing test case:", ex)
     finally:
         close_db_connection(con)
+
+
 
 
 
@@ -595,6 +613,7 @@ def refresh_test_runs(tab2_frame):
 
 
 
+
 def load_test_runs():
     try:
         con = get_db_connection()
@@ -618,14 +637,16 @@ def view_testcase_run(tab2_frame, test_run_id):
     try:
         con = get_db_connection()
         with con.cursor() as cursor:
+            # Извлекаем данные о тест-кейсе
             cursor.execute(
                 "SELECT tc.name, tc.description, tr.status, tr.execution_date FROM TestRuns tr "
                 "JOIN TestCases tc ON tr.testcase_id = tc.id_case WHERE tr.id_run = %s;", (test_run_id,)
             )
             test_run = cursor.fetchone()
 
+            # Извлекаем шаги тест-кейса
             cursor.execute(
-                "SELECT StepNumber, ActionDescription, ExpectedResult, Status FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;",
+                "SELECT StepNumber, ActionDescription, ExpectedResult, Status FROM TestCaseSteps WHERE TestCaseID = (SELECT testcase_id FROM TestRuns WHERE id_run = %s) ORDER BY StepNumber;",
                 (test_run_id,)
             )
             steps = cursor.fetchall()
@@ -664,6 +685,9 @@ def view_testcase_run(tab2_frame, test_run_id):
         print("[ERROR] Error while viewing test case run:", ex)
     finally:
         close_db_connection(con)
+
+
+
 
 
 

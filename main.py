@@ -1,11 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
-from testcase_management import create_testsuite_window, refresh_testsuites, show_testcases
-from user_management import check_credentials, current_user_role_id
 from gui import create_user_management_tab, create_error_message, create_base_tab, create_test_run_tab
-
-
+from user_management import check_credentials, get_current_user_role_id
 
 def login():
     def try_login():
@@ -52,13 +49,10 @@ def main():
 
     create_user_management_tab(root, tab_control)
     create_base_tab(root, tab_control)
-    create_test_run_tab(root, tab_control)  # Добавить эту строку
+    create_test_run_tab(root, tab_control)
 
     tab_control.pack(expand=1, fill="both")
     root.mainloop()
-
-
-
 
 if __name__ == "__main__":
     login()
