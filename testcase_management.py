@@ -188,6 +188,21 @@ def edit_testcase(root, test_case_id, refresh_testcases_callback):
         finally:
             close_db_connection(con)
 
+    def add_step(step_num, step="", result="", status="Не задан"):
+        step_label = tk.Label(steps_frame, text=f"Шаг {step_num}:")
+        step_label.grid(row=step_num, column=0, sticky="w")
+        step_entry = tk.Entry(steps_frame, width=50)
+        step_entry.insert(0, step)
+        step_entry.grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
+        result_label = tk.Label(steps_frame, text="Ожидаемый результат:")
+        result_label.grid(row=step_num, column=2, sticky="w")
+        result_entry = tk.Entry(steps_frame, width=50)
+        result_entry.insert(0, result)
+        result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
+
+        steps_widgets.append((step_entry, result_entry))
+        num_steps[0] += 1
+
     con = None
     try:
         con = get_db_connection()
@@ -215,27 +230,20 @@ def edit_testcase(root, test_case_id, refresh_testcases_callback):
         steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
         steps_widgets = []
+        num_steps = [0]
+
         for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
-            step_label = tk.Label(steps_frame, text=f"Шаг {step_num}:")
-            step_label.grid(row=step_num, column=0, sticky="w")
-            step_entry = tk.Entry(steps_frame, width=50)
-            step_entry.insert(0, step)
-            step_entry.grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
-            result_label = tk.Label(steps_frame, text="Ожидаемый результат:")
-            result_label.grid(row=step_num, column=2, sticky="w")
-            result_entry = tk.Entry(steps_frame, width=50)
-            result_entry.insert(0, result)
-            result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-            status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame))
-            status_button.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
-            steps_widgets.append((step_entry, result_entry, status_button))
+            add_step(step_num, step, result, status)
+
+        add_step_button = tk.Button(edit_window, text="Добавить шаги", command=lambda: add_step(num_steps[0] + 1))
+        add_step_button.grid(row=3, column=0, columnspan=2, pady=10)
+
+        save_button = tk.Button(edit_window, text="Сохранить", command=save_edited_testcase)
+        save_button.grid(row=4, column=0, columnspan=2, pady=10)
 
         steps_frame.columnconfigure(1, weight=1)
         steps_frame.columnconfigure(3, weight=1)
         steps_frame.rowconfigure(len(steps) + 1, weight=1)
-
-        save_button = tk.Button(edit_window, text="Сохранить", command=save_edited_testcase)
-        save_button.grid(row=3, column=0, columnspan=2, pady=10)
 
     except Exception as ex:
         print("[ERROR] Error while editing test case:", ex)
@@ -342,10 +350,8 @@ def create_testcase_window(root, refresh_testcases_callback, suite_id, test_case
         result_entry = tk.Entry(steps_frame, width=50)
         result_entry.insert(0, result)
         result_entry.grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-        status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame))
-        status_button.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
 
-        steps_widgets.append((step_entry, result_entry, status_button))
+        steps_widgets.append((step_entry, result_entry))
         num_steps[0] += 1
 
     testcase_window = tk.Toplevel(root)
