@@ -473,6 +473,8 @@ def save_test_run(test_case_id, user_id, status):
     finally:
         close_db_connection(con)
 
+
+
 # Обновление функции view_testcase с добавлением кнопки "Завершить"
 def view_testcase(root, test_case_id):
     con = None
@@ -548,21 +550,6 @@ def load_test_runs():
         close_db_connection(con)
 
 
-def create_test_run_tab(root, tab_control):
-    test_run_tab = ttk.Frame(tab_control)
-    tab_control.add(test_run_tab, text="Пройденные тесты")
-
-    frame_btn = tk.Frame(test_run_tab)
-    frame_btn.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-
-    button_refresh = tk.Button(frame_btn, text="Обновить", command=lambda: refresh_test_runs(tab2_frame))
-    button_refresh.grid(row=0, column=0, pady=5, padx=5)
-
-    tab2_frame = tk.Frame(test_run_tab)
-    tab2_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
-
-    refresh_test_runs(tab2_frame)
-
 
 def refresh_test_runs(tab2_frame):
     for widget in tab2_frame.winfo_children():
@@ -607,19 +594,6 @@ def refresh_test_runs(tab2_frame):
     refresh_button.pack(side=tk.LEFT, padx=5, pady=5)
 
 
-
-def main():
-    root = tk.Tk()
-    root.geometry("800x700")
-    root.title("RED DWARF")
-
-    tab_control = ttk.Notebook(root)
-
-    create_base_tab(root, tab_control)
-    create_test_run_tab(root, tab_control)
-
-    tab_control.pack(expand=1, fill="both")
-    root.mainloop()
 
 def load_test_runs():
     try:
@@ -690,6 +664,8 @@ def view_testcase_run(tab2_frame, test_run_id):
         print("[ERROR] Error while viewing test case run:", ex)
     finally:
         close_db_connection(con)
+
+
 
 
 def delete_test_run(test_run_id, tab2_frame):
@@ -786,3 +762,24 @@ def create_base_tab(root, tab_control):
     add_button.pack(side=tk.LEFT, padx=5, pady=5)
 
     refresh_testsuite_list()
+
+
+def load_test_runs_by_suite(suite_id):
+    try:
+        con = get_db_connection()
+        with con.cursor() as cursor:
+            cursor.execute(
+                "SELECT tr.id_run, tc.name, tr.status, tr.execution_date FROM TestRuns tr "
+                "JOIN TestCases tc ON tr.testcase_id = tc.id_case "
+                "JOIN TestSuiteCases tsc ON tc.id_case = tsc.case_id "
+                "WHERE tsc.suite_id = %s;", (suite_id,)
+            )
+            test_runs = cursor.fetchall()
+            return test_runs
+    except Exception as ex:
+        print("[ERROR] Error while loading test runs by suite:", ex)
+        return []
+    finally:
+        close_db_connection(con)
+
+
