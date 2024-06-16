@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
 from database import get_db_connection, close_db_connection
+from user_management import get_current_user_role_id
+
 
 # Functions to manage test cases
 def save_testcase(name, description, steps, refresh_testcases_callback, suite_id=None):
@@ -135,18 +137,32 @@ def view_testcase(root, test_case_id):
         steps_frame.columnconfigure(3, weight=1)
         steps_frame.rowconfigure(len(steps) + 1, weight=1)
 
+        # Добавление кнопки "Завершить"
+        def finish_testcase():
+            user_id = get_current_user_role_id()  # Получение текущего пользователя
+            save_test_run(test_case_id, user_id, "Успешен")  # Статус можно изменить на нужный
+            refresh_test_runs(view_window)  # Обновление пройденных тестов
+
+        finish_button = tk.Button(view_window, text="Завершить", command=finish_testcase)
+        finish_button.grid(row=3, column=0, columnspan=2, pady=10)
+
     except Exception as ex:
         print("[ERROR] Error while viewing test case:", ex)
     finally:
         close_db_connection(con)
 
-def change_status(step_num, steps_frame):
+
+
+
+
+def change_status(step_num, steps_frame, test_case_id, user_id):
     status_window = tk.Toplevel(steps_frame)
     status_window.title("Изменить статус")
 
     def set_status(new_status):
         button = steps_frame.grid_slaves(row=step_num, column=4)[0]
         button.config(text=new_status)
+        save_test_run(test_case_id, user_id, new_status)
         status_window.destroy()
 
     statuses = [("Успешен", "green"), ("Пропущен", "yellow"), ("Провален", "red"), ("Заблокирован", "grey")]
@@ -155,12 +171,14 @@ def change_status(step_num, steps_frame):
         button = tk.Button(status_window, text=status, bg=color, command=lambda s=status: set_status(s))
         button.grid(row=idx, column=0, padx=5, pady=5, sticky="we")
 
+
+
 def edit_testcase(root, test_case_id, refresh_testcases_callback):
     def save_edited_testcase():
         name = name_entry.get()
         description = description_entry.get()
         steps = [(step_entry.get(), result_entry.get(), status_button.cget("text")) for step_entry, result_entry, status_button in steps_widgets]
-
+        status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame, test_case_id, user_id))
         con = None
         try:
             con = get_db_connection()
@@ -487,3 +505,147 @@ def refresh_testcases(testcases_window, suite_id):
         tk.Button(testcases_window, text="Просмотр", command=lambda tcid=test_case_id: view_testcase(testcases_window, tcid)).grid(row=idx + 1, column=1, sticky="w")
         tk.Button(testcases_window, text="Редактировать", command=lambda tcid=test_case_id: create_testcase_window(testcases_window, lambda: refresh_testcases(testcases_window, suite_id), suite_id, tcid)).grid(row=idx + 1, column=2, sticky="w")
         tk.Button(testcases_window, text="Удалить", command=lambda tcid=test_case_id: delete_testcase(tcid, lambda: refresh_testcases(testcases_window, suite_id))).grid(row=idx + 1, column=3, sticky="w")
+
+def save_test_run(test_case_id, user_id, status):
+    con = None
+    try:
+        con = get_db_connection()
+        with con.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO TestRuns (testcase_id, user_id, status) VALUES (%s, %s, %s);",
+                (test_case_id, user_id, status)
+            )
+        con.commit()
+        print("[INFO] Test run saved successfully!")
+    except Exception as ex:
+        print("[ERROR] Error while saving test run:", ex)
+    finally:
+        close_db_connection(con)
+
+# Обновление функции view_testcase с добавлением кнопки "Завершить"
+def view_testcase(root, test_case_id):
+    con = None
+    try:
+        con = get_db_connection()
+        with con.cursor() as cursor:
+            cursor.execute("SELECT name, description FROM TestCases WHERE id_case = %s;", (test_case_id,))
+            testcase = cursor.fetchone()
+
+            cursor.execute("SELECT StepNumber, ActionDescription, ExpectedResult, Status FROM TestCaseSteps WHERE TestCaseID = %s ORDER BY StepNumber;", (test_case_id,))
+            steps = cursor.fetchall()
+
+        view_window = tk.Toplevel(root)
+        view_window.title("Просмотр тест-кейса")
+
+        tk.Label(view_window, text="Название:").grid(row=0, column=0, sticky="w")
+        tk.Label(view_window, text=testcase[0]).grid(row=0, column=1, padx=10, pady=5, sticky="we")
+
+        tk.Label(view_window, text="Описание:").grid(row=1, column=0, sticky="w")
+        tk.Label(view_window, text=testcase[1]).grid(row=1, column=1, padx=10, pady=5, sticky="we")
+
+        steps_frame = tk.Frame(view_window)
+        steps_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
+
+        for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
+            tk.Label(steps_frame, text=f"Шаг {step_num}:").grid(row=step_num, column=0, sticky="w")
+            tk.Label(steps_frame, text=step).grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
+            tk.Label(steps_frame, text="Ожидаемый результат:").grid(row=step_num, column=2, sticky="w")
+            tk.Label(steps_frame, text=result).grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
+            status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame))
+            status_button.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
+
+        steps_frame.columnconfigure(1, weight=1)
+        steps_frame.columnconfigure(3, weight=1)
+        steps_frame.rowconfigure(len(steps) + 1, weight=1)
+
+        # Добавление кнопки "Завершить"
+        def finish_testcase():
+            user_id = get_current_user_role_id()  # Получение текущего пользователя
+            save_test_run(test_case_id, user_id, "Успешен")  # Статус можно изменить на нужный
+            refresh_test_runs(view_window)  # Обновление пройденных тестов
+
+        finish_button = tk.Button(view_window, text="Завершить", command=finish_testcase)
+        finish_button.grid(row=3, column=0, columnspan=2, pady=10)
+
+    except Exception as ex:
+        print("[ERROR] Error while viewing test case:", ex)
+    finally:
+        close_db_connection(con)
+
+
+def load_test_runs():
+    try:
+        con = get_db_connection()
+        with con.cursor() as cursor:
+            cursor.execute(
+                "SELECT tr.id_run, ts.suite_name, tc.name, tr.status, tr.execution_date FROM TestRuns tr "
+                "JOIN TestCases tc ON tr.testcase_id = tc.id_case "
+                "JOIN TestSuiteCases tsc ON tc.id_case = tsc.case_id "
+                "JOIN TestSuites ts ON tsc.suite_id = ts.suite_id;"
+            )
+            test_runs = cursor.fetchall()
+            return test_runs
+    except Exception as ex:
+        print("[ERROR] Error while loading test runs:", ex)
+        return []
+    finally:
+        close_db_connection(con)
+
+
+def create_test_run_tab(root, tab_control):
+    test_run_tab = ttk.Frame(tab_control)
+    tab_control.add(test_run_tab, text="Пройденные тесты")
+
+    frame_btn = tk.Frame(test_run_tab)
+    frame_btn.grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+    button_refresh = tk.Button(frame_btn, text="Обновить", command=lambda: refresh_test_runs(tab2_frame))
+    button_refresh.grid(row=0, column=0, pady=5, padx=5)
+
+    tab2_frame = tk.Frame(test_run_tab)
+    tab2_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+
+    refresh_test_runs(tab2_frame)
+
+
+def refresh_test_runs(tab2_frame):
+    for widget in tab2_frame.winfo_children():
+        widget.destroy()
+
+    test_runs = load_test_runs()
+    for idx, (id_run, suite_name, case_name, status, execution_date) in enumerate(test_runs):
+        tk.Label(tab2_frame, text=f"{suite_name} - {case_name}").grid(row=idx, column=0, sticky="w")
+        tk.Label(tab2_frame, text=status).grid(row=idx, column=1, sticky="w")
+        tk.Label(tab2_frame, text=execution_date).grid(row=idx, column=2, sticky="w")
+
+
+def main():
+    root = tk.Tk()
+    root.geometry("800x700")
+    root.title("RED DWARF")
+
+    tab_control = ttk.Notebook(root)
+
+    create_base_tab(root, tab_control)
+    create_test_run_tab(root, tab_control)
+
+    tab_control.pack(expand=1, fill="both")
+    root.mainloop()
+
+def load_test_runs():
+    try:
+        con = get_db_connection()
+        with con.cursor() as cursor:
+            cursor.execute(
+                "SELECT tr.id_run, ts.suite_name, tc.name, tr.status, tr.execution_date FROM TestRuns tr "
+                "JOIN TestCases tc ON tr.testcase_id = tc.id_case "
+                "JOIN TestSuiteCases tsc ON tc.id_case = tsc.case_id "
+                "JOIN TestSuites ts ON tsc.suite_id = ts.suite_id;"
+            )
+            test_runs = cursor.fetchall()
+            return test_runs
+    except Exception as ex:
+        print("[ERROR] Error while loading test runs:", ex)
+        return []
+    finally:
+        close_db_connection(con)
