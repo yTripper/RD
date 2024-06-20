@@ -6,6 +6,7 @@ from testcase_management import (
     create_testsuite_window, refresh_testsuites, load_testsuites, delete_testsuite,
     save_test_run, load_test_runs, load_test_runs_by_suite, view_testcase_run, delete_test_run, refresh_test_runs
 )
+
 from user_management import check_credentials, get_current_user_role_id
 import psycopg2
 from config import host, user as db_user, password as db_password, db_name
@@ -275,8 +276,21 @@ def create_base_tab(root, tab_control):
 
     refresh_testsuite_list()
 
+# Глобальная переменная для хранения открытых окон тест-кейсов
+open_testcase_windows = {}
+
 def show_testcases(root, suite_id):
+    global open_testcase_windows
+
+    # Если окно уже открыто, фокусируемся на нем и выходим
+    if suite_id in open_testcase_windows and open_testcase_windows[suite_id].winfo_exists():
+        open_testcase_windows[suite_id].lift()
+        open_testcase_windows[suite_id].focus_force()
+        return
+
     testcase_window = tk.Toplevel(root)
+    open_testcase_windows[suite_id] = testcase_window  # Сохраняем ссылку на новое окно
+
     testcase_window.title("Тест-кейсы набора")
 
     def load_testcases():
@@ -356,6 +370,15 @@ def show_testcases(root, suite_id):
     add_button.pack(side=tk.LEFT, padx=5, pady=5)
 
     refresh_testcase_list()
+
+    # Закрытие окна и удаление из глобального списка
+    def on_closing():
+        del open_testcase_windows[suite_id]
+        testcase_window.destroy()
+
+    testcase_window.protocol("WM_DELETE_WINDOW", on_closing)
+
+
 
 def create_test_run_tab(root, tab_control):
     test_run_tab = ttk.Frame(tab_control)

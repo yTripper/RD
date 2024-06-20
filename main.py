@@ -18,6 +18,11 @@ def login():
     login_window.title("Вход в систему")
     login_window.geometry("300x150")
 
+    # Установка иконки для окна входа
+    icon_path = "img/RD.png"
+    login_icon = ImageTk.PhotoImage(Image.open(icon_path))  # Сохраняем ссылку на иконку
+    login_window.iconphoto(True, login_icon)
+
     tk.Label(login_window, text="Имя пользователя:").pack(pady=5)
     username_entry = tk.Entry(login_window)
     username_entry.pack(pady=5)
@@ -35,6 +40,11 @@ def main():
     root = tk.Tk()
     root.geometry("800x700")
     root.title("RED DWARF")
+
+    # Установка иконки для главного окна
+    icon_path = "img/RD.png"
+    main_icon = ImageTk.PhotoImage(Image.open(icon_path))  # Сохраняем ссылку на иконку
+    root.iconphoto(True, main_icon)
 
     tab_control = ttk.Notebook(root)
 

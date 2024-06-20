@@ -112,15 +112,18 @@ def change_status(step_num, steps_frame, test_case_id, user_id, step_statuses):
 
     def set_status(new_status):
         button = steps_frame.grid_slaves(row=step_num, column=4)[0]
-        button.config(text=new_status)
+        color = status_colors.get(new_status, "white")  # Получаем цвет для нового статуса
+        button.config(text=new_status, bg=color, activebackground=color)  # Устанавливаем текст и цвет кнопки
         step_statuses[step_num] = new_status
         status_window.destroy()
 
     statuses = [("Успешен", "green"), ("Пропущен", "yellow"), ("Провален", "red"), ("Заблокирован", "grey")]
+    status_colors = {status: color for status, color in statuses}
 
     for idx, (status, color) in enumerate(statuses):
         button = tk.Button(status_window, text=status, bg=color, command=lambda s=status: set_status(s))
         button.grid(row=idx, column=0, padx=5, pady=5, sticky="we")
+
 
 
 def edit_testcase(root, test_case_id, refresh_testcases_callback):
@@ -424,21 +427,6 @@ def refresh_testsuites(root, tab2_frame, show_testcases_callback):
         tk.Button(tab2_frame, text="Редактировать", command=lambda sid=suite_id: create_testsuite_window(root, lambda: refresh_testsuites(root, tab2_frame, show_testcases_callback), sid)).grid(row=idx, column=2, sticky="w")
         tk.Button(tab2_frame, text="Удалить", command=lambda sid=suite_id: delete_testsuite(sid, lambda: refresh_testsuites(root, tab2_frame, show_testcases_callback))).grid(row=idx, column=3, sticky="w")
 
-def show_testcases(root, suite_id):
-    testcases_window = tk.Toplevel(root)
-    testcases_window.title("Тест-кейсы набора")
-
-    frame_btn = tk.Frame(testcases_window)
-    frame_btn.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-
-    button_create_case = tk.Button(frame_btn, text="Создать тест-кейс", command=lambda: create_testcase_window(root, lambda: refresh_testcases(testcases_window, suite_id), suite_id))
-    button_create_case.grid(row=0, column=0, pady=5, padx=5)
-
-    tab2_frame = tk.Frame(testcases_window)
-    tab2_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
-
-    refresh_testcases(testcases_window, suite_id)
-
 def refresh_testcases(testcases_window, suite_id):
     for widget in testcases_window.grid_slaves():
         widget.destroy()
@@ -481,8 +469,18 @@ def save_test_run(test_case_id, user_id, status, step_statuses):
         close_db_connection(con)
 
 
-# Обновление функции view_testcase с добавлением кнопки "Завершить"
+# Глобальная переменная для хранения открытых окон просмотра тест-кейсов
+view_testcase_windows = {}
+
 def view_testcase(root, test_case_id):
+    global view_testcase_windows
+
+    # Если окно уже открыто, фокусируемся на нем и выходим
+    if test_case_id in view_testcase_windows and view_testcase_windows[test_case_id].winfo_exists():
+        view_testcase_windows[test_case_id].lift()
+        view_testcase_windows[test_case_id].focus_force()
+        return
+
     con = None
     try:
         con = get_db_connection()
@@ -501,6 +499,7 @@ def view_testcase(root, test_case_id):
 
         view_window = tk.Toplevel(root)
         view_window.title("Просмотр тест-кейса")
+        view_testcase_windows[test_case_id] = view_window  # Сохраняем ссылку на новое окно
 
         tk.Label(view_window, text="Название:").grid(row=0, column=0, sticky="w")
         tk.Label(view_window, text=testcase[0]).grid(row=0, column=1, padx=10, pady=5, sticky="we")
@@ -514,12 +513,21 @@ def view_testcase(root, test_case_id):
         user_id = get_current_user_role_id()
         step_statuses = {}
 
+        statuses = [("Успешен", "green"), ("Пропущен", "yellow"), ("Провален", "red"), ("Заблокирован", "grey")]
+        status_colors = {status: color for status, color in statuses}
+
         for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
             tk.Label(steps_frame, text=f"Шаг {step_num}:").grid(row=step_num, column=0, sticky="w")
             tk.Label(steps_frame, text=step).grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
             tk.Label(steps_frame, text="Ожидаемый результат:").grid(row=step_num, column=2, sticky="w")
             tk.Label(steps_frame, text=result).grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-            status_button = tk.Button(steps_frame, text=status, command=lambda sn=step_num: change_status(sn, steps_frame, test_case_id, user_id, step_statuses))
+            status_button = tk.Button(
+                steps_frame,
+                text='Не задан',
+                bg=status_colors.get('Не задан', "white"),  # Устанавливаем цвет кнопки в зависимости от статуса
+                activebackground=status_colors.get('Не задан', "white"),  # Устанавливаем цвет при активации
+                command=lambda sn=step_num: change_status(sn, steps_frame, test_case_id, user_id, step_statuses)
+            )
             status_button.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
 
         steps_frame.columnconfigure(1, weight=1)
@@ -529,10 +537,18 @@ def view_testcase(root, test_case_id):
         finish_button = tk.Button(view_window, text="Завершить", command=lambda: finish_testcase(view_window, test_case_id, user_id, step_statuses))
         finish_button.grid(row=3, column=0, columnspan=2, pady=10)
 
+        # Закрытие окна и удаление из глобального списка
+        def on_closing():
+            del view_testcase_windows[test_case_id]
+            view_window.destroy()
+
+        view_window.protocol("WM_DELETE_WINDOW", on_closing)
+
     except Exception as ex:
         print("[ERROR] Error while viewing test case:", ex)
     finally:
         close_db_connection(con)
+
 
 
 
@@ -609,6 +625,7 @@ def refresh_test_runs(tab2_frame):
 
 
 
+
 def load_test_runs():
     try:
         con = get_db_connection()
@@ -627,7 +644,18 @@ def load_test_runs():
     finally:
         close_db_connection(con)
 
+# Глобальная переменная для хранения открытых окон просмотра пройденных тест-кейсов
+view_testcase_run_windows = {}
+
 def view_testcase_run(tab2_frame, test_run_id):
+    global view_testcase_run_windows
+
+    # Если окно уже открыто, фокусируемся на нем и выходим
+    if test_run_id in view_testcase_run_windows and view_testcase_run_windows[test_run_id].winfo_exists():
+        view_testcase_run_windows[test_run_id].lift()
+        view_testcase_run_windows[test_run_id].focus_force()
+        return
+
     con = None
     try:
         con = get_db_connection()
@@ -648,6 +676,7 @@ def view_testcase_run(tab2_frame, test_run_id):
 
         view_window = tk.Toplevel(tab2_frame)
         view_window.title("Просмотр пройденного тест-кейса")
+        view_testcase_run_windows[test_run_id] = view_window  # Сохраняем ссылку на новое окно
 
         tk.Label(view_window, text="Название:").grid(row=0, column=0, sticky="w")
         tk.Label(view_window, text=test_run[0]).grid(row=0, column=1, padx=10, pady=5, sticky="we")
@@ -664,24 +693,37 @@ def view_testcase_run(tab2_frame, test_run_id):
         steps_frame = tk.Frame(view_window)
         steps_frame.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
+        statuses = [("Успешен", "green"), ("Пропущен", "yellow"), ("Провален", "red"), ("Заблокирован", "grey")]
+        status_colors = {status: color for status, color in statuses}
+
         for step_num, (step_number, step, result, status) in enumerate(steps, start=1):
             tk.Label(steps_frame, text=f"Шаг {step_num}:").grid(row=step_num, column=0, sticky="w")
             tk.Label(steps_frame, text=step).grid(row=step_num, column=1, padx=5, pady=5, sticky="we")
             tk.Label(steps_frame, text="Ожидаемый результат:").grid(row=step_num, column=2, sticky="w")
             tk.Label(steps_frame, text=result).grid(row=step_num, column=3, padx=5, pady=5, sticky="we")
-            tk.Label(steps_frame, text="Статус:").grid(row=step_num, column=4, sticky="w")
-            tk.Label(steps_frame, text=status).grid(row=step_num, column=5, padx=5, pady=5, sticky="we")
+            status_label = tk.Label(
+                steps_frame,
+                text=status,
+                bg=status_colors.get(status, "white"),
+                width=12
+            )
+            status_label.grid(row=step_num, column=4, padx=5, pady=5, sticky="we")
 
         steps_frame.columnconfigure(1, weight=1)
         steps_frame.columnconfigure(3, weight=1)
         steps_frame.rowconfigure(len(steps) + 1, weight=1)
 
+        # Закрытие окна и удаление из глобального списка
+        def on_closing():
+            del view_testcase_run_windows[test_run_id]
+            view_window.destroy()
+
+        view_window.protocol("WM_DELETE_WINDOW", on_closing)
+
     except Exception as ex:
         print("[ERROR] Error while viewing test case run:", ex)
     finally:
         close_db_connection(con)
-
-
 
 
 
